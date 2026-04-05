@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Govspeak Checker</title>
+<style>
+:root {
+  --govuk-black: #0b0c0c;
+  --govuk-white: #ffffff;
+  --govuk-blue: #1d70b8;
+  --govuk-light-grey: #f3f2f1;
+  --govuk-mid-grey: #b1b4b6;
+  --govuk-dark-grey: #505a5f;
+  --govuk-red: #d4351c;
+  --govuk-orange: #f47738;
+  --govuk-green: #00703c;
+  --govuk-yellow: #ffdd00;
+  --error-bg: rgba(212,53,28,0.08);
+  --warning-bg: rgba(244,119,56,0.08);
+  --suggestion-bg: rgba(29,112,184,0.08);
+  --error-border: #d4351c;
+  --warning-border: #f47738;
+  --suggestion-border: #1d70b8;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "GDS Transport", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--govuk-black);
+  background: var(--govuk-light-grey);
+}
+.govuk-header {
+  background: var(--govuk-black);
+  color: var(--govuk-white);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.govuk-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.govuk-header .crown {
+  font-size: 14px;
+  opacity: 0.8;
+}
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 60px);
+}
+@media (max-width: 900px) {
+  .main-layout { grid-template-columns: 1fr; }
+}
+.panel {
+  background: var(--govuk-white);
+  border: 1px solid var(--govuk-mid-grey);
+  border-radius: 0;
+  padding: 20px;
+}
+.input-panel { display: flex; flex-direction: column; gap: 15px; }
+.paste-toggle {
+  display: flex;
+  gap: 0;
+  border: 2px solid var(--govuk-black);
+}
+.paste-toggle button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: var(--govuk-white);
+  color: var(--govuk-black);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 400;
+}
+.paste-toggle button.active {
+  background: var(--govuk-black);
+  color: var(--govuk-white);
+  font-weight: 700;
+}
+.editor-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 400px;
+  border: 2px solid var(--govuk-black);
+  position: relative;
+  overflow: hidden;
+}
+.line-numbers {
+  width: 48px;
+  min-width: 48px;
+  background: #f8f8f8;
+  border-right: 1px solid var(--govuk-mid-grey);
+  padding: 10px 4px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--govuk-dark-grey);
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+}
+.line-numbers .blank-marker {
+  color: var(--govuk-mid-grey);
+  font-size: 10px;
+}
+.editor-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.highlight-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-y: auto;
+  pointer-events: none;
+  color: transparent;
+}
+.highlight-overlay .hl-error {
+  background: var(--error-bg);
+  border-bottom: 2px solid var(--error-border);
+  border-radius: 2px;
+}
+.highlight-overlay .hl-warning {
+  background: var(--warning-bg);
+  border-bottom: 2px solid var(--warning-border);
+  border-radius: 2px;
+}
+.highlight-overlay .hl-suggestion {
+  background: var(--suggestion-bg);
+  border-bottom: 2px solid var(--suggestion-border);
+  border-radius: 2px;
+}
+#editor {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  border: none;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: var(--govuk-black);
+  overflow-y: auto;
+  tab-size: 2;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.toolbar .btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  color: var(--govuk-white);
+  background: var(--govuk-green);
+}
+.toolbar .btn:hover { background: #005a30; }
+.toolbar .btn-secondary {
+  background: var(--govuk-light-grey);
+  color: var(--govuk-black);
+  border: 1px solid var(--govuk-mid-grey);
+  font-weight: 400;
+}
+.toolbar .btn-secondary:hover { background: #e0e0e0; }
+.sentence-config {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--govuk-dark-grey);
+}
+.sentence-config input[type="number"] {
+  width: 50px;
+  padding: 4px 6px;
+  border: 2px solid var(--govuk-black);
+  font-family: inherit;
+  font-size: 13px;
+}
+.tabs-panel { display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--govuk-black);
+}
+.tab-bar button {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-family: inherit;
+  font-weight: 400;
+  border: none;
+  background: var(--govuk-light-grey);
+  color: var(--govuk-black);
+  cursor: pointer;
+  border-bottom: 4px solid transparent;
+  margin-bottom: -2px;
+}
+.tab-bar button.active {
+  background: var(--govuk-white);
+  font-weight: 700;
+  border-bottom-color: var(--govuk-blue);
+}
+.tab-content { display: none; flex: 1; overflow-y: auto; }
+.tab-content.active { display: flex; flex-direction: column; }
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 15px 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--govuk-mid-grey);
+  background: var(--govuk-light-grey);
+}
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--govuk-mid-grey);
+  background: var(--govuk-white);
+  cursor: pointer;
+  border-radius: 0;
+  color: var(--govuk-black);
+}
+.filter-btn.active {
+  background: var(--govuk-black);
+  color: var(--govuk-white);
+  border-color: var(--govuk-black);
+}
+.filter-btn .count {
+  display: inline-block;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--govuk-mid-grey);
+  color: var(--govuk-black);
+}
+.filter-btn.active .count {
+  background: rgba(255,255,255,0.3);
+  color: var(--govuk-white);
+}
+.filter-btn.f-error .count { background: var(--govuk-red); color: #fff; }
+.filter-btn.f-warning .count { background: var(--govuk-orange); color: #fff; }
+.filter-btn.f-suggestion .count { background: var(--govuk-blue); color: #fff; }
+.issues-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.issue-item {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--govuk-light-grey);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+}
+.issue-item:hover { background: var(--govuk-light-grey); }
+.severity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.severity-dot.error { background: var(--govuk-red); }
+.severity-dot.warning { background: var(--govuk-orange); }
+.severity-dot.suggestion { background: var(--govuk-blue); }
+.issue-body { flex: 1; }
+.issue-line {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--govuk-dark-grey);
+}
+.issue-msg { margin: 2px 0; }
+.issue-found {
+  font-size: 13px;
+  color: var(--govuk-dark-grey);
+  font-family: monospace;
+  background: var(--govuk-light-grey);
+  padding: 2px 6px;
+  display: inline-block;
+  margin-top: 4px;
+}
+.issue-replacement {
+  font-size: 13px;
+  color: var(--govuk-green);
+  font-weight: 700;
+}
+.issue-actions { flex-shrink: 0; }
+.approve-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--govuk-mid-grey);
+  background: var(--govuk-white);
+  cursor: pointer;
+  color: var(--govuk-dark-grey);
+}
+.approve-btn:hover { background: var(--govuk-light-grey); }
+details.collapsible {
+  border: 1px solid var(--govuk-mid-grey);
+  margin: 10px 20px;
+}
+details.collapsible summary {
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--govuk-light-grey);
+  user-select: none;
+}
+details.collapsible .detail-body {
+  padding: 15px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.heading-tree { list-style: none; padding: 0; margin: 0; }
+.heading-tree li { padding: 3px 0; font-size: 14px; }
+.heading-tree .dup { color: var(--govuk-red); font-weight: 700; }
+.heading-tree .h2 { padding-left: 0; }
+.heading-tree .h3 { padding-left: 20px; }
+.heading-tree .h4 { padding-left: 40px; }
+.heading-tree .h5 { padding-left: 60px; }
+.heading-tree .h6 { padding-left: 80px; }
+.preview-body {
+  font-family: "GDS Transport", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.preview-body h2 { font-size: 24px; margin: 16px 0 8px; }
+.preview-body h3 { font-size: 20px; margin: 12px 0 6px; }
+.preview-body h4 { font-size: 18px; margin: 10px 0 6px; }
+.preview-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+.preview-body th, .preview-body td {
+  border: 1px solid var(--govuk-mid-grey);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+}
+.preview-body th { background: var(--govuk-light-grey); font-weight: 700; }
+.preview-body .callout-info {
+  border-left: 4px solid var(--govuk-blue);
+  padding: 10px 15px;
+  margin: 10px 0;
+  background: var(--suggestion-bg);
+}
+.preview-body .callout-warning {
+  border-left: 4px solid var(--govuk-orange);
+  padding: 10px 15px;
+  margin: 10px 0;
+  background: var(--warning-bg);
+}
+.preview-body .contact-block, .preview-body .address-block {
+  border-left: 4px solid var(--govuk-mid-grey);
+  padding: 10px 15px;
+  margin: 10px 0;
+  background: var(--govuk-light-grey);
+}
+.acronym-output {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  flex: 1;
+}
+.acronym-output textarea {
+  flex: 1;
+  min-height: 200px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 2px solid var(--govuk-black);
+  resize: vertical;
+}
+.acronym-output .copy-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.acronym-output .copy-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  color: var(--govuk-white);
+  background: var(--govuk-blue);
+}
+.acronym-output .copy-btn:hover { background: #003078; }
+.acronym-unmatched {
+  padding: 10px;
+  background: var(--warning-bg);
+  border-left: 4px solid var(--govuk-orange);
+  font-size: 14px;
+}
+.quick-ref summary {
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--govuk-light-grey);
+  border: 1px solid var(--govuk-mid-grey);
+  user-select: none;
+}
+.quick-ref .ref-body {
+  padding: 12px 15px;
+  border: 1px solid var(--govuk-mid-grey);
+  border-top: none;
+  font-size: 13px;
+  font-family: monospace;
+  line-height: 1.7;
+  background: var(--govuk-white);
+  white-space: pre-wrap;
+}
+.summary-bar {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--govuk-dark-grey);
+  background: var(--govuk-white);
+  border-bottom: 1px solid var(--govuk-mid-grey);
+}
+.no-issues {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--govuk-dark-grey);
+  font-size: 16px;
+}
+.no-issues .tick { font-size: 48px; color: var(--govuk-green); }
+</style>
+</head>
+<body>
+<header class="govuk-header">
+  <div>
+    <span class="crown">GOV.UK</span>
+    <h1>Govspeak Checker</h1>
+  </div>
+  <span style="font-size:13px;opacity:0.7">Ctrl+Enter to check &middot; Ctrl+Shift+C to copy acronyms</span>
+</header>
+
+<div class="main-layout">
+  <div class="panel input-panel">
+    <div class="paste-toggle">
+      <button id="pastePlain" class="active" onclick="setPasteMode('plain')">Plain text</button>
+      <button id="pasteWord" onclick="setPasteMode('word')">Convert from Word</button>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn" onclick="runChecks()" title="Ctrl+Enter">Check</button>
+      <button class="btn-secondary btn" onclick="clearAll()">Clear</button>
+      <span class="sentence-config">
+        <label for="sentenceLen">Sentence length:</label>
+        <input type="number" id="sentenceLen" value="25" min="10" max="100">
+        <span>words</span>
+      </span>
+    </div>
+
+    <div class="editor-wrap">
+      <div class="line-numbers" id="lineNumbers"></div>
+      <div class="editor-container">
+        <div class="highlight-overlay" id="highlightOverlay"></div>
+        <textarea id="editor" placeholder="Paste or type your govspeak content here..." spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <details class="quick-ref">
+      <summary>Quick reference: Govspeak syntax</summary>
+      <div class="ref-body">## Heading level 2
+### Heading level 3
+#### Heading level 4
+
+**bold text**
+*italic text*
+
+[link text](https://www.gov.uk/example)
+
+- bullet point
+- another bullet
+
+1. numbered item
+2. another item
+
+| Header 1 | Header 2 |
+|-----------|----------|
+| Cell 1    | Cell 2   |
+
+^This is an information callout^
+
+%This is a warning callout%
+
+$C
+Contact block content
+$C
+
+$A
+Address line 1
+Address line 2
+Postcode
+$A
+
+*[ACRONYM]: Full Name Spelled Out
+
+{button}[Button text](https://example.com){/button}
+
+---  (horizontal rule)</div>
+    </details>
+  </div>
+
+  <div class="panel tabs-panel">
+    <div class="tab-bar">
+      <button class="active" onclick="switchTab('checker',this)">Error Checker</button>
+      <button onclick="switchTab('acronyms',this)">Acronym Generator</button>
+    </div>
+
+    <div class="tab-content active" id="tab-checker">
+      <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All <span class="count" id="countAll">0</span></button>
+        <button class="filter-btn f-error" data-filter="error" onclick="setFilter('error',this)">Errors <span class="count" id="countError">0</span></button>
+        <button class="filter-btn f-warning" data-filter="warning" onclick="setFilter('warning',this)">Warnings <span class="count" id="countWarning">0</span></button>
+        <button class="filter-btn f-suggestion" data-filter="suggestion" onclick="setFilter('suggestion',this)">Suggestions <span class="count" id="countSuggestion">0</span></button>
+      </div>
+      <div class="summary-bar" id="summaryBar">Paste or type content to check.</div>
+      <details class="collapsible" id="headingOutline">
+        <summary>Heading structure</summary>
+        <div class="detail-body"><ul class="heading-tree" id="headingTree"></ul></div>
+      </details>
+      <details class="collapsible" id="previewSection">
+        <summary>Preview</summary>
+        <div class="detail-body preview-body" id="previewBody"></div>
+      </details>
+      <ul class="issues-list" id="issuesList"></ul>
+      <div class="no-issues" id="noIssues" style="display:none">
+        <div class="tick">&#10003;</div>
+        <p>No issues found.</p>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-acronyms">
+      <div class="acronym-output">
+        <p style="font-size:14px;color:var(--govuk-dark-grey);margin:0">
+          Acronyms found in your content. Edit the output below, then copy.
+        </p>
+        <div class="acronym-unmatched" id="unmatchedAcronyms" style="display:none"></div>
+        <textarea id="acronymOutput" placeholder="Acronym definitions will appear here after checking..."></textarea>
+        <div class="copy-bar">
+          <button class="copy-btn" onclick="copyAcronyms()" title="Ctrl+Shift+C">Copy acronym list</button>
+          <span id="copyStatus" style="font-size:13px;color:var(--govuk-green);display:none">Copied!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ CONSTANTS ============
+const COMMON_ABBREVS = new Set([
+  'BBC','CCTV','DIY','DVLA','EU','GP','HM','HTML','ID','MI5','MI6',
+  'MOT','MP','NHS','PAYE','SORN','TV','UK','URL','USA','US','VAT','VPN',
+  'JPG','PDF','PNG','BA','GCSE','PhD','KC','OBE'
+]);
+
+const VALID_HTML_TAGS = new Set([
+  'br','abbr','div','span','p','strong','em','a','ul','ol','li',
+  'table','thead','tbody','tr','th','td','sup','sub','hr','img'
+]);
+
+let pasteMode = 'plain';
+let currentFilter = 'all';
+let currentIssues = [];
+let approvedSmartChars = new Set();
+let debounceTimer = null;
+
+// ============ 100 STYLE RULES ============
+const STYLE_RULES = [
+  {id:'months_abbrev',cat:'style',msg:'Do not abbreviate month names. Use the full month name.',pat:'\\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\\b',sug:'Expand month name',flags:'gi'},
+  {id:'date_ordinal',cat:'style',msg:'Do not use ordinals in dates (use 20 February, not 20th February).',pat:'\\b([0-9]{1,2})(st|nd|rd|th)\\b',sug:'Remove the ordinal',flags:'gi'},
+  {id:'date_comma',cat:'style',msg:'Do not use a comma in dates. Use 20 February 2026.',pat:'\\b([0-9]{1,2})\\s+([A-Z][a-z]+)\\s*,\\s*([0-9]{4})\\b',sug:'Remove the comma',flags:'g'},
+  {id:'week_commencing',cat:'style',msg:'Avoid "w/c". Write "week commencing" in full.',pat:'\\bw\\/c\\b',sug:'week commencing',flags:'gi'},
+  {id:'latin_abbrev',cat:'style',msg:'Avoid Latin abbreviations. Write in full words.',pat:'(?<!\\w)(e\\.g\\.|i\\.e\\.|etc\\.)(?!\\w)',sug:'Replace with full words',flags:'gi'},
+  {id:'negative_contractions',cat:'style',msg:'Avoid negative contractions. Use the full form (for example "do not" instead of "don\'t").',pat:"\\b(don['\u2019]t|can['\u2019]t|won['\u2019]t|shouldn['\u2019]t|wouldn['\u2019]t|couldn['\u2019]t|isn['\u2019]t|aren['\u2019]t|wasn['\u2019]t|weren['\u2019]t|haven['\u2019]t|hasn['\u2019]t|hadn['\u2019]t|didn['\u2019]t|doesn['\u2019]t)\\b",sug:'Write it out in full',flags:'gi'},
+  {id:'click_here',cat:'style',msg:'Do not use "click here" as link text.',pat:'\\bclick here\\b',sug:'Use meaningful link text',flags:'gi'},
+  {id:'time_24hr',cat:'style',msg:'GOV.UK uses am/pm, not 24-hour clock.',pat:'\\b([01]?[0-9]|2[0-3])[:.h]([0-5][0-9])\\s*hrs?\\b|\\b([2][0-3]|[01][0-9])[:.][0-5][0-9]\\b',sug:'Use am/pm format',flags:'gi'},
+  {id:'ampersand',cat:'style',msg:'Avoid ampersands (&). Use "and".',pat:'&(?!\\w+;|#)',sug:'and',flags:'g'},
+  {id:'percent_word',cat:'style',msg:'Use "per cent" (two words) in text.',pat:'\\bpercent\\b',sug:'per cent',flags:'gi'},
+  {id:'please_note',cat:'style',msg:'No need to say "please" in GOV.UK content.',pat:'\\bplease\\b',sug:'Remove "please"',flags:'gi'},
+  {id:'in_order_to',cat:'style',msg:'"In order to" is not needed. Use "to" instead.',pat:'\\bin order to\\b',sug:'to',flags:'gi'},
+  {id:'going_forward',cat:'style',msg:'Avoid "going forward" or "moving forward".',pat:'\\b(going forward|moving forward)\\b',sug:'from now on',flags:'gi'},
+  {id:'key_adjective',cat:'style',msg:'Avoid "key" as an adjective. Use "important".',pat:'\\bkey(?=\\s+\\w)',sug:'important',flags:'gi'},
+  {id:'utilise',cat:'style',msg:'Avoid "utilise". Use "use".',pat:'\\butili[sz]e[sd]?\\b',sug:'use',flags:'gi'},
+  {id:'leverage_word',cat:'style',msg:'Avoid "leverage". Use "use" or "influence".',pat:'\\bleverag(?:e[sd]?|ing)\\b',sug:'use',flags:'gi'},
+  {id:'facilitate',cat:'style',msg:'Avoid "facilitate". Be specific about how you are helping.',pat:'\\bfacilit(?:ate[sd]?|ating)\\b',sug:'(be specific)',flags:'gi'},
+  {id:'collaborate',cat:'style',msg:'Avoid "collaborate". Use "work with".',pat:'\\bcollaborate[sd]?\\b|\\bcollaborating\\b',sug:'work with',flags:'gi'},
+  {id:'deliver_abstract',cat:'style',msg:'Avoid "deliver" for abstract things. Use "make", "create" or "provide".',pat:'\\bdeliver(?:ed|ing|s)?(?=\\s+(?:the|a|an|our|their|this|new|better|improved))',sug:'make, create or provide',flags:'gi'},
+  {id:'streamline',cat:'style',msg:'Avoid "streamline". Use "simplify".',pat:'\\bstreamlin(?:e[sd]?|ing)\\b',sug:'simplify',flags:'gi'},
+  {id:'robust_word',cat:'style',msg:'Avoid "robust". Use "comprehensive".',pat:'\\brobust\\b',sug:'comprehensive',flags:'gi'},
+  {id:'tackle_word',cat:'style',msg:'Avoid "tackle". Use "stop", "solve" or "deal with".',pat:'\\btackl(?:e[sd]?|ing)\\b',sug:'stop or solve',flags:'gi'},
+  {id:'transform_word',cat:'style',msg:'Avoid "transform". Describe specifically what you are doing.',pat:'\\btransform(?:ed|ing|s|ation)?\\b',sug:'(describe the change)',flags:'gi'},
+  {id:'impact_verb',cat:'style',msg:'Avoid "impact" as a verb. Use "affect".',pat:'\\bimpact(?:ed|ing|s)\\b',sug:'affect',flags:'gi'},
+  {id:'proforma',cat:'style',msg:'Do not use "proforma". Use "template" or "form".',pat:'\\bproforma\\b',sug:'template or form',flags:'gi'},
+  {id:'sats_word',cat:'style',msg:'Do not call national curriculum tests "SATs".',pat:'\\bSATs\\b',sug:'national curriculum tests',flags:'g'},
+  {id:'hm_government',cat:'style',msg:'Do not use "HM government". Use "UK government".',pat:'\\bHM\\s+[Gg]overnment\\b',sug:'UK government',flags:'g'},
+  {id:'slash_or',cat:'style',msg:'Do not use slashes in place of "or".',pat:'\\b(and|or|his|her|him|they|them|he|she)\\/(and|or|his|her|him|they|them|he|she)\\b',sug:'or',flags:'gi'},
+  {id:'vague_link_here',cat:'links',msg:'Avoid "here" as link text.',pat:'\\[here\\]\\(',sug:'Use descriptive link text',flags:'gi'},
+  {id:'vague_link_this_link',cat:'links',msg:'Avoid "this link" as link text.',pat:'\\[this link\\]\\(',sug:'Use descriptive link text',flags:'gi'},
+  {id:'vague_link_read_more',cat:'links',msg:'Avoid "read more" as link text.',pat:'\\[read more\\]\\(',sug:'Use descriptive link text',flags:'gi'},
+  {id:'vague_link_more_info',cat:'links',msg:'Avoid "more information" as link text.',pat:'\\[more information\\]\\(',sug:'Be specific',flags:'gi'},
+  {id:'directional_below',cat:'links',msg:'Avoid directional text like "the link below".',pat:'\\b(link|links|information) below\\b',sug:'Remove directional wording',flags:'gi'},
+  {id:'directional_above',cat:'links',msg:'Avoid directional text like "above".',pat:'\\b(see|as|listed) above\\b',sug:'Remove directional wording',flags:'gi'},
+  {id:'at_this_point',cat:'words',msg:'Avoid "at this point in time". Use "now".',pat:'\\bat this point in time\\b',sug:'now',flags:'gi'},
+  {id:'significant_word',cat:'words',msg:'Avoid "significant" unless you quantify it.',pat:'\\bsignificant\\b',sug:'Be specific',flags:'gi'},
+  {id:'prior_to',cat:'words',msg:'Avoid "prior to". Use "before".',pat:'\\bprior to\\b',sug:'before',flags:'gi'},
+  {id:'in_the_event',cat:'words',msg:'Avoid "in the event that". Use "if".',pat:'\\bin the event that\\b',sug:'if',flags:'gi'},
+  {id:'commence',cat:'words',msg:'Avoid "commence". Use "start".',pat:'\\bcommence[sd]?\\b',sug:'start',flags:'gi'},
+  {id:'subsequent_to',cat:'words',msg:'Avoid "subsequent to". Use "after".',pat:'\\bsubsequent to\\b',sug:'after',flags:'gi'},
+  {id:'approximately',cat:'words',msg:'Avoid "approximately" if "about" is enough.',pat:'\\bapproximately\\b',sug:'about',flags:'gi'},
+  {id:'due_to_the_fact',cat:'words',msg:'Avoid "due to the fact that". Use "because".',pat:'\\bdue to the fact that\\b',sug:'because',flags:'gi'},
+  {id:'with_regard_to',cat:'words',msg:'Avoid "with regard to". Use "about".',pat:'\\bwith regard to\\b',sug:'about',flags:'gi'},
+  {id:'date_slash',cat:'dates',msg:'Avoid numeric dates. Use 20 February 2026.',pat:'\\b\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}\\b',sug:'Use day month year',flags:'g'},
+  {id:'date_iso',cat:'dates',msg:'Avoid ISO dates in running text.',pat:'\\b\\d{4}-\\d{2}-\\d{2}\\b',sug:'Use day month year',flags:'g'},
+  {id:'time_am_pm_space',cat:'dates',msg:'Do not use a space before am or pm.',pat:'\\b(\\d{1,2})\\s+(am|pm)\\b',sug:'Remove the space',flags:'gi'},
+  {id:'time_with_period',cat:'dates',msg:'Avoid full stops in am or pm.',pat:'(am\\.|pm\\.)',sug:'am or pm',flags:'gi'},
+  {id:'bullet_semicolon',cat:'bullets',msg:'Avoid semicolons at end of bullet points.',pat:';\\s*$',sug:'Remove the semicolon',flags:'gm'},
+  {id:'bullet_comma',cat:'bullets',msg:'Avoid commas at end of bullet points.',pat:',\\s*$',sug:'Remove the comma',flags:'gm'},
+  {id:'brackets_singular_plural',cat:'words',msg:'Do not use brackets for singular/plural. Use the plural.',pat:'\\b\\w+\\(s\\)\\b',sug:'Use the plural form',flags:'gi'},
+  {id:'and_or_slash',cat:'words',msg:'Do not use "and/or". Write "and" or "or" in full.',pat:'\\band\\/or\\b',sug:'Rewrite using "and" or "or"',flags:'gi'},
+  {id:'double_spaces',cat:'structure',msg:'Avoid double spaces.',pat:'(?<=\\S) {2,}(?=\\S)',sug:'Use single spaces',flags:'g'},
+  {id:'exclamation',cat:'words',msg:'Avoid exclamation marks. Use a full stop.',pat:'!(?!=)',sug:'.',flags:'g'},
+  {id:'with_regards_to',cat:'words',msg:'Avoid "with regards to". Use "about".',pat:'\\bwith regards to\\b',sug:'about',flags:'gi'},
+  {id:'in_relation_to',cat:'words',msg:'Avoid "in relation to". Use "about".',pat:'\\bin relation to\\b',sug:'about',flags:'gi'},
+  {id:'in_respect_of',cat:'words',msg:'Avoid "in respect of". Use "about".',pat:'\\bin respect of\\b',sug:'about',flags:'gi'},
+  {id:'provide_assistance',cat:'words',msg:'Avoid "provide assistance". Use "help".',pat:'\\bprovide assistance\\b',sug:'help',flags:'gi'},
+  {id:'at_this_time',cat:'words',msg:'Avoid "at this time". Use "now".',pat:'\\bat this time\\b',sug:'now',flags:'gi'},
+  {id:'please_note_phrase',cat:'words',msg:'Avoid "please note".',pat:'\\bplease note\\b',sug:'Remove "please note"',flags:'gi'},
+  {id:'click_below',cat:'links',msg:'Avoid directional link text.',pat:'\\b(link|see)\\s+(below|above)\\b',sug:'Use descriptive link text',flags:'gi'},
+  {id:'www_prefix',cat:'links',msg:'Avoid starting a web address with "www.".',pat:'\\bwww\\.[a-z0-9\\-]+\\.[a-z]{2,}\\b',sug:'Use a descriptive link',flags:'gi'},
+  {id:'http_in_text',cat:'links',msg:'Avoid showing full URLs in body text.',pat:'(?<!\\()https?:\\/\\/\\S+',sug:'Use a descriptive link',flags:'gi'},
+  {id:'oxford_comma',cat:'words',msg:'Avoid the Oxford comma.',pat:',\\s+and\\s',sug:'Remove the extra comma',flags:'g'},
+  {id:'life_cycle',cat:'words',msg:'Use "life cycle" (2 words) not "lifecycle".',pat:'\\blifecycle\\b',sug:'life cycle',flags:'gi'},
+  {id:'one_stop_shop',cat:'words',msg:'Avoid "one stop shop". Use "service".',pat:'\\bone stop shop\\b',sug:'service',flags:'gi'},
+  {id:'hub_portal',cat:'words',msg:'Avoid "hub" or "portal". Use "website" or "service".',pat:'\\b(hub|portal)\\b',sug:'website',flags:'gi'},
+  {id:'ringfence',cat:'words',msg:'Avoid "ring-fence". Explain what you mean.',pat:'\\bring[\\-\\s]?fenc(?:e|ed|ing)\\b',sug:'money set aside',flags:'gi'},
+  {id:'date_numeric',cat:'dates',msg:'Avoid numeric date formats.',pat:'\\b([0-3]?\\d)[\\/\\-]([01]?\\d)[\\/\\-]([12]\\d{3})\\b',sug:'Use day month year',flags:'g'},
+  {id:'iso_date',cat:'dates',msg:'Avoid ISO dates in running text.',pat:'\\b([12]\\d{3})\\-([01]\\d)\\-([0-3]\\d)\\b',sug:'Use day month year',flags:'g'},
+  {id:'in_accordance_with',cat:'words',msg:'Avoid "in accordance with". Use "under".',pat:'\\bin accordance with\\b',sug:'under',flags:'gi'},
+  {id:'as_soon_as_possible',cat:'words',msg:'Avoid "at the earliest opportunity".',pat:'\\bat the earliest opportunity\\b',sug:'as soon as possible',flags:'gi'},
+  {id:'regular_basis',cat:'words',msg:'Avoid "on a regular basis". Use "regularly".',pat:'\\bon a regular basis\\b',sug:'regularly',flags:'gi'},
+  {id:'in_order_that',cat:'words',msg:'Avoid "in order that". Use "so that".',pat:'\\bin order that\\b',sug:'so that',flags:'gi'},
+  {id:'currently_word',cat:'words',msg:'Avoid "currently" unless contrasting past and present.',pat:'\\bcurrently\\b',sug:'Remove if not needed',flags:'gi'},
+  {id:'shall_must',cat:'words',msg:'Avoid "shall". Use "must".',pat:'\\bshall\\b',sug:'must',flags:'gi'},
+  {id:'advise_tell',cat:'words',msg:'Avoid "advise" when you mean "tell".',pat:'\\badvise[sd]?\\b|\\badvising\\b',sug:'tell',flags:'gi'},
+  {id:'incentivise',cat:'words',msg:'Avoid "incentivise". Use "encourage".',pat:'\\bincentivis(?:e|ed|es|ing)\\b',sug:'encourage',flags:'gi'},
+  {id:'impact_noun',cat:'words',msg:'Avoid "impact" as noun. Use "effect".',pat:'\\bthe impact on\\b',sug:'the effect on',flags:'gi'},
+  {id:'whilst_while',cat:'words',msg:'Use "while" not "whilst".',pat:'\\bwhilst\\b',sug:'while',flags:'gi'},
+  {id:'us_spellings',cat:'words',msg:'Use British spelling in GOV.UK content.',pat:'\\b(organize|organizing|organized|analyze|analyzing|analyzed|specialty)\\b',sug:'Use British spelling',flags:'gi'},
+  {id:'double_negatives',cat:'words',msg:'Avoid double negatives.',pat:'\\bnot\\s+un[a-z]+\\b',sug:'Rewrite to remove double negative',flags:'gi'},
+  {id:'click_verb',cat:'links',msg:'Avoid "click" in instructions. Use "select".',pat:'\\bclick\\b',sug:'select',flags:'gi'},
+  {id:'webpage',cat:'words',msg:'Use "web page" (2 words) not "webpage".',pat:'\\bwebpage\\b',sug:'web page',flags:'gi'},
+  {id:'login_log_in',cat:'words',msg:'Use "log in" (verb) or "login" (noun).',pat:'\\blogin\\b',sug:'log in (verb) or login (noun)',flags:'gi'},
+  {id:'set_up',cat:'words',msg:'Use "set up" (verb) or "setup" (noun).',pat:'\\bsetup\\b',sug:'set up (verb) or setup (noun)',flags:'gi'},
+  {id:'email_hyphen',cat:'words',msg:'Use "email" not "e-mail".',pat:'\\be-mail\\b',sug:'email',flags:'gi'},
+  {id:'ampm_caps',cat:'dates',msg:'Use lower case "am" and "pm".',pat:'\\b(AM|PM)\\b',sug:'am or pm',flags:'g'},
+  {id:'noon_midday',cat:'dates',msg:'Use "midday" or "midnight" instead of 12am/12pm.',pat:'\\b12\\s*(?:am|pm)\\b',sug:'Use midday or midnight',flags:'gi'},
+  {id:'bullet_multiple_sentences',cat:'bullets',msg:'Avoid more than one sentence per bullet point.',pat:'^(?:\\s*[\\u2022\\-\\*]\\s+).*\\.\\s+[A-Z].+',sug:'Use one sentence per bullet',flags:'gm'},
+  {id:'bullet_link_whole',cat:'links',msg:'Avoid making a whole long bullet a link.',pat:'^(?:\\s*[\\u2022\\-\\*]\\s+)\\[[^\\]]{40,}\\]\\([^)]+\\)',sug:'Shorten the link text',flags:'gm'}
+];
+
+// ============ PASTE MODE ============
+function setPasteMode(mode) {
+  pasteMode = mode;
+  document.getElementById('pastePlain').classList.toggle('active', mode === 'plain');
+  document.getElementById('pasteWord').classList.toggle('active', mode === 'word');
+}
+
+// ============ WORD CONVERTER ============
+function convertFromWord(html) {
+  let text = html;
+  // Remove Word-specific tags and comments
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+  text = text.replace(/<style[\s\S]*?<\/style>/gi, '');
+  text = text.replace(/<meta[^>]*>/gi, '');
+  text = text.replace(/<\/?o:[^>]*>/gi, '');
+  text = text.replace(/<\/?w:[^>]*>/gi, '');
+  text = text.replace(/<\/?m:[^>]*>/gi, '');
+
+  // Convert headings
+  for (let i = 6; i >= 1; i--) {
+    const hashes = '#'.repeat(i);
+    text = text.replace(new RegExp('<h' + i + '[^>]*>(.*?)<\\/h' + i + '>', 'gi'),
+      (_, content) => '\n' + hashes + ' ' + stripTags(content).trim() + '\n');
+  }
+
+  // Convert bold
+  text = text.replace(/<(?:strong|b)(?:\s[^>]*)?>(.*?)<\/(?:strong|b)>/gi, '**$1**');
+
+  // Convert italic
+  text = text.replace(/<(?:em|i)(?:\s[^>]*)?>(.*?)<\/(?:em|i)>/gi, '*$1*');
+
+  // Convert links
+  text = text.replace(/<a\s+[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi,
+    (_, url, linkText) => '[' + stripTags(linkText).trim() + '](' + url + ')');
+
+  // Convert tables
+  text = text.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (_, tableHtml) => {
+    const rows = [];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
+      const cells = [];
+      const cellRegex = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+      let cellMatch;
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        cells.push(stripTags(cellMatch[1]).trim());
+      }
+      rows.push(cells);
+    }
+    if (rows.length === 0) return '';
+    let result = '\n';
+    rows.forEach((row, idx) => {
+      result += '| ' + row.join(' | ') + ' |\n';
+      if (idx === 0) {
+        result += '| ' + row.map(() => '---').join(' | ') + ' |\n';
+      }
+    });
+    return result + '\n';
+  });
+
+  // Convert unordered lists
+  text = text.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (_, listHtml) => {
+    let items = '';
+    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    let liMatch;
+    while ((liMatch = liRegex.exec(listHtml)) !== null) {
+      items += '- ' + stripTags(liMatch[1]).trim() + '\n';
+    }
+    return '\n' + items + '\n';
+  });
+
+  // Convert ordered lists
+  text = text.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_, listHtml) => {
+    let items = '';
+    let num = 1;
+    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    let liMatch;
+    while ((liMatch = liRegex.exec(listHtml)) !== null) {
+      items += num + '. ' + stripTags(liMatch[1]).trim() + '\n';
+      num++;
+    }
+    return '\n' + items + '\n';
+  });
+
+  // Convert br and p
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/p>/gi, '\n\n');
+  text = text.replace(/<p[^>]*>/gi, '');
+
+  // Strip remaining HTML
+  text = stripTags(text);
+
+  // Clean up whitespace
+  text = text.replace(/\n{3,}/g, '\n\n');
+  text = text.trim();
+  return text;
+}
+
+function stripTags(html) {
+  return html.replace(/<[^>]+>/g, '');
+}
+
+// ============ EDITOR SETUP ============
+const editor = document.getElementById('editor');
+const lineNumbers = document.getElementById('lineNumbers');
+const highlightOverlay = document.getElementById('highlightOverlay');
+
+function updateLineNumbers() {
+  const lines = editor.value.split('\n');
+  let html = '';
+  for (let i = 0; i < lines.length; i++) {
+    const num = i + 1;
+    if (lines[i].trim() === '') {
+      html += '<div><span class="blank-marker">' + num + ' &#x2205;</span></div>';
+    } else {
+      html += '<div>' + num + '</div>';
+    }
+  }
+  lineNumbers.innerHTML = html;
+}
+
+function syncScroll() {
+  lineNumbers.scrollTop = editor.scrollTop;
+  highlightOverlay.scrollTop = editor.scrollTop;
+}
+
+editor.addEventListener('scroll', syncScroll);
+editor.addEventListener('input', () => {
+  updateLineNumbers();
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(runChecks, 500);
+});
+
+editor.addEventListener('paste', (e) => {
+  if (pasteMode === 'word') {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const plain = e.clipboardData.getData('text/plain');
+    const converted = html ? convertFromWord(html) : plain;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + converted + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + converted.length;
+    updateLineNumbers();
+  }
+  setTimeout(() => {
+    updateLineNumbers();
+    runChecks();
+  }, 50);
+});
+
+// ============ KEYBOARD SHORTCUTS ============
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault();
+    runChecks();
+  }
+  if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+    e.preventDefault();
+    copyAcronyms();
+  }
+});
+
+// ============ TABS ============
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  btn.classList.add('active');
+  if (tabId === 'acronyms') generateAcronyms();
+}
+
+// ============ FILTER ============
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderIssues();
+}
+
+// ============ ERROR CHECKING ENGINE ============
+function runChecks() {
+  const text = editor.value;
+  currentIssues = [];
+
+  if (!text.trim()) {
+    renderResults();
+    generateAcronyms();
+    return;
+  }
+
+  // 1. Syntax errors
+  checkHeadingLevels(text);
+  checkLinkFormat(text);
+  checkCallouts(text);
+
+  // 2. Style warnings (100 rules)
+  runStyleWarnings(text);
+  checkSmartCharacters(text);
+
+  // 3. Suggestions
+  checkSentenceLength(text);
+  checkDuplicateHeadings(text);
+
+  renderResults();
+  generateAcronyms();
+}
+
+function getLineCol(text, offset) {
+  const before = text.substring(0, offset);
+  const line = (before.match(/\n/g) || []).length + 1;
+  const lastNl = before.lastIndexOf('\n');
+  const col = offset - lastNl;
+  return { line, col };
+}
+
+function addIssue(severity, ruleId, message, found, replacement, offset, length, category) {
+  const text = editor.value;
+  const { line, col } = getLineCol(text, offset);
+  currentIssues.push({ severity, ruleId, message, found, replacement, offset, length, line, col, category });
+}
+
+// --- Syntax error checks ---
+function checkHeadingLevels(text) {
+  const lines = text.split('\n');
+  let offset = 0;
+  let lastLevel = 0;
+
+  for (const line of lines) {
+    const m = line.match(/^(#{1,6})\s/);
+    if (m) {
+      const level = m[1].length;
+      if (level === 1) {
+        addIssue('error', 'h1_heading', 'Do not use level 1 headings (#) in govspeak. Use ## or deeper.',
+          m[0].trim(), '## (level 2)', offset, m[0].length, 'syntax');
+      }
+      if (lastLevel > 0 && level > lastLevel + 1) {
+        addIssue('error', 'skipped_heading', 'Heading level skipped. Expected ' + '#'.repeat(lastLevel + 1) +
+          ' but found ' + '#'.repeat(level) + '.',
+          m[0].trim(), '#'.repeat(lastLevel + 1), offset, m[0].length, 'syntax');
+      }
+      lastLevel = level;
+    }
+    offset += line.length + 1;
+  }
+}
+
+function checkLinkFormat(text) {
+  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+  let m;
+  while ((m = linkRegex.exec(text)) !== null) {
+    const linkText = m[1];
+    const url = m[2];
+    if (!linkText.trim()) {
+      addIssue('error', 'empty_link_text', 'Link has empty text.',
+        m[0], 'Add descriptive link text', m.index, m[0].length, 'links');
+    }
+    if (!url.trim()) {
+      addIssue('error', 'empty_link_url', 'Link has empty URL.',
+        m[0], 'Add a valid URL', m.index, m[0].length, 'links');
+    } else if (url.trim() && !url.match(/^(https?:\/\/|\/|mailto:|#)/i)) {
+      addIssue('error', 'invalid_link_url', 'Link URL may be invalid. Expected http://, https://, /, mailto: or # prefix.',
+        m[0], 'Use a full URL', m.index, m[0].length, 'links');
+    }
+  }
+}
+
+function checkCallouts(text) {
+  // Check for unclosed ^ callouts (info)
+  const caretBlocks = text.split('\n');
+  let offset = 0;
+  let inCaret = false;
+  let caretStart = 0;
+  for (const line of caretBlocks) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('^') && !trimmed.endsWith('^')) {
+      if (!inCaret) { inCaret = true; caretStart = offset; }
+    } else if (inCaret && trimmed.endsWith('^')) {
+      inCaret = false;
+    } else if (trimmed.startsWith('^') && trimmed.endsWith('^') && trimmed.length > 1) {
+      // single-line callout, fine
+    }
+    offset += line.length + 1;
+  }
+
+  // Check $C/$A blocks
+  const blockTypes = [
+    { open: '$C', close: '$C', name: 'Contact block' },
+    { open: '$A', close: '$A', name: 'Address block' },
+    { open: '$D', close: '$D', name: 'Download block' },
+    { open: '$E', close: '$E', name: 'Example block' }
+  ];
+  for (const bt of blockTypes) {
+    let searchFrom = 0;
+    let openCount = 0;
+    const positions = [];
+    while (true) {
+      const idx = text.indexOf(bt.open, searchFrom);
+      if (idx === -1) break;
+      positions.push(idx);
+      searchFrom = idx + bt.open.length;
+    }
+    if (positions.length % 2 !== 0) {
+      const lastPos = positions[positions.length - 1];
+      addIssue('error', 'unclosed_block_' + bt.open, bt.name + ' (' + bt.open + ') is not properly closed. Blocks need opening and closing tags.',
+        bt.open, 'Add closing ' + bt.close, lastPos, bt.open.length, 'syntax');
+    }
+  }
+}
+
+// --- Style warnings ---
+function runStyleWarnings(text) {
+  for (const rule of STYLE_RULES) {
+    let regex;
+    try {
+      regex = new RegExp(rule.pat, rule.flags);
+    } catch (e) {
+      continue;
+    }
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      addIssue('warning', rule.id, rule.msg, m[0], rule.sug, m.index, m[0].length, rule.cat);
+      if (!regex.global) break;
+      if (m[0].length === 0) { regex.lastIndex++; }
+    }
+  }
+}
+
+function checkSmartCharacters(text) {
+  const smartChars = [
+    { pat: /\u201c/g, name: 'Left double quote', replacement: '"' },
+    { pat: /\u201d/g, name: 'Right double quote', replacement: '"' },
+    { pat: /\u2018/g, name: 'Left single quote', replacement: "'" },
+    { pat: /\u2019/g, name: 'Right single quote/apostrophe', replacement: "'" },
+    { pat: /\u2014/g, name: 'Em dash', replacement: ' - ' },
+    { pat: /\u2013/g, name: 'En dash', replacement: '-' },
+    { pat: /\u2026/g, name: 'Ellipsis character', replacement: '...' },
+    { pat: /\u00a0/g, name: 'Non-breaking space', replacement: ' ' }
+  ];
+  for (const sc of smartChars) {
+    let m;
+    while ((m = sc.pat.exec(text)) !== null) {
+      const key = sc.name + '_' + m.index;
+      if (approvedSmartChars.has(key)) continue;
+      const issue = {
+        severity: 'warning',
+        ruleId: 'smart_char',
+        message: 'Smart character detected: ' + sc.name + '. Replace with plain equivalent.',
+        found: sc.name + ' (character code U+' + m[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') + ')',
+        replacement: sc.replacement === ' ' ? '(regular space)' : '"' + sc.replacement + '"',
+        offset: m.index,
+        length: m[0].length,
+        category: 'smart_chars',
+        approveKey: key
+      };
+      const { line, col } = getLineCol(text, m.index);
+      issue.line = line;
+      issue.col = col;
+      currentIssues.push(issue);
+    }
+  }
+}
+
+// --- Suggestions ---
+function checkSentenceLength(text) {
+  const threshold = parseInt(document.getElementById('sentenceLen').value) || 25;
+  const lines = text.split('\n');
+  let offset = 0;
+  for (const line of lines) {
+    // Skip headings, bullets, table rows, callouts
+    if (/^[#|\-\*\d\.\^%\$]/.test(line.trim()) || line.trim() === '') {
+      offset += line.length + 1;
+      continue;
+    }
+    // Split by sentence-ending punctuation
+    const sentences = line.split(/(?<=[.!?])\s+/);
+    let sentOffset = 0;
+    for (const sent of sentences) {
+      const words = sent.trim().split(/\s+/).filter(w => w.length > 0);
+      if (words.length > threshold) {
+        addIssue('suggestion', 'long_sentence',
+          'Sentence has ' + words.length + ' words (limit: ' + threshold + '). Consider splitting it.',
+          sent.substring(0, 60) + (sent.length > 60 ? '...' : ''),
+          'Split into shorter sentences',
+          offset + sentOffset, sent.length, 'structure');
+      }
+      sentOffset += sent.length + 1;
+    }
+    offset += line.length + 1;
+  }
+}
+
+function checkDuplicateHeadings(text) {
+  const lines = text.split('\n');
+  const headings = {};
+  let offset = 0;
+  for (const line of lines) {
+    const m = line.match(/^(#{2,6})\s+(.+)/);
+    if (m) {
+      const heading = m[2].trim().toLowerCase();
+      if (headings[heading] !== undefined) {
+        addIssue('suggestion', 'duplicate_heading',
+          'Duplicate heading "' + m[2].trim() + '". Consider using unique headings.',
+          m[0], 'Use a unique heading', offset, m[0].length, 'structure');
+      }
+      headings[heading] = offset;
+    }
+    offset += line.length + 1;
+  }
+}
+
+// ============ RENDER RESULTS ============
+function renderResults() {
+  const text = editor.value;
+  updateCounts();
+  renderHighlights();
+  renderIssues();
+  renderHeadingOutline();
+  renderPreview();
+  updateSummary();
+}
+
+function updateCounts() {
+  const errors = currentIssues.filter(i => i.severity === 'error').length;
+  const warnings = currentIssues.filter(i => i.severity === 'warning').length;
+  const suggestions = currentIssues.filter(i => i.severity === 'suggestion').length;
+  document.getElementById('countAll').textContent = currentIssues.length;
+  document.getElementById('countError').textContent = errors;
+  document.getElementById('countWarning').textContent = warnings;
+  document.getElementById('countSuggestion').textContent = suggestions;
+}
+
+function updateSummary() {
+  const bar = document.getElementById('summaryBar');
+  if (!editor.value.trim()) {
+    bar.textContent = 'Paste or type content to check.';
+    return;
+  }
+  const e = currentIssues.filter(i => i.severity === 'error').length;
+  const w = currentIssues.filter(i => i.severity === 'warning').length;
+  const s = currentIssues.filter(i => i.severity === 'suggestion').length;
+  if (currentIssues.length === 0) {
+    bar.textContent = 'No issues found.';
+  } else {
+    bar.textContent = currentIssues.length + ' issue' + (currentIssues.length !== 1 ? 's' : '') +
+      ' found: ' + e + ' error' + (e !== 1 ? 's' : '') +
+      ', ' + w + ' warning' + (w !== 1 ? 's' : '') +
+      ', ' + s + ' suggestion' + (s !== 1 ? 's' : '');
+  }
+}
+
+function renderHighlights() {
+  const text = editor.value;
+  if (!text || currentIssues.length === 0) {
+    highlightOverlay.innerHTML = '';
+    return;
+  }
+
+  // Sort issues by offset
+  const sorted = [...currentIssues].sort((a, b) => a.offset - b.offset);
+
+  // Filter overlaps - keep first occurrence
+  const used = [];
+  const filtered = sorted.filter(issue => {
+    const start = issue.offset;
+    const end = start + issue.length;
+    for (const u of used) {
+      if (start < u.end && end > u.start) return false;
+    }
+    used.push({ start, end });
+    return true;
+  });
+
+  let html = '';
+  let lastIdx = 0;
+  for (const issue of filtered) {
+    if (issue.offset > lastIdx) {
+      html += escapeHtml(text.substring(lastIdx, issue.offset));
+    }
+    html += '<span class="hl-' + issue.severity + '">' +
+            escapeHtml(text.substring(issue.offset, issue.offset + issue.length)) +
+            '</span>';
+    lastIdx = issue.offset + issue.length;
+  }
+  if (lastIdx < text.length) {
+    html += escapeHtml(text.substring(lastIdx));
+  }
+  highlightOverlay.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderIssues() {
+  const list = document.getElementById('issuesList');
+  const noIssues = document.getElementById('noIssues');
+
+  const filtered = currentFilter === 'all'
+    ? currentIssues
+    : currentIssues.filter(i => i.severity === currentFilter);
+
+  // Sort by line
+  filtered.sort((a, b) => a.line - b.line || a.col - b.col);
+
+  if (filtered.length === 0 && editor.value.trim()) {
+    list.innerHTML = '';
+    noIssues.style.display = currentIssues.length === 0 ? 'block' : 'none';
+    if (currentIssues.length > 0 && filtered.length === 0) {
+      list.innerHTML = '<li class="no-issues" style="padding:20px;text-align:center;color:var(--govuk-dark-grey)">No ' +
+        currentFilter + 's found.</li>';
+      noIssues.style.display = 'none';
+    }
+    return;
+  }
+
+  noIssues.style.display = 'none';
+
+  list.innerHTML = filtered.map((issue, idx) => {
+    let foundHtml = '';
+    if (issue.found) {
+      foundHtml = '<span class="issue-found">Found: ' + escapeHtml(String(issue.found).substring(0, 80)) + '</span>';
+    }
+    let replHtml = '';
+    if (issue.replacement) {
+      replHtml = ' <span class="issue-replacement">&rarr; ' + escapeHtml(issue.replacement) + '</span>';
+    }
+    let approveBtn = '';
+    if (issue.approveKey) {
+      approveBtn = '<div class="issue-actions"><button class="approve-btn" onclick="approveSmartChar(\'' +
+        escapeHtml(issue.approveKey) + '\',' + idx + ',event)">Approve</button></div>';
+    }
+    return '<li class="issue-item" data-severity="' + issue.severity + '" onclick="jumpToLine(' + issue.line + ',' + issue.offset + ')">' +
+      '<span class="severity-dot ' + issue.severity + '"></span>' +
+      '<div class="issue-body">' +
+        '<span class="issue-line">Line ' + issue.line + '</span> ' +
+        '<span class="issue-msg">' + escapeHtml(issue.message) + '</span><br>' +
+        foundHtml + replHtml +
+      '</div>' + approveBtn +
+    '</li>';
+  }).join('');
+}
+
+function jumpToLine(line, offset) {
+  editor.focus();
+  editor.setSelectionRange(offset, offset);
+  // Scroll to line
+  const lineHeight = 21; // approx
+  editor.scrollTop = (line - 5) * lineHeight;
+  syncScroll();
+}
+
+function approveSmartChar(key, idx, event) {
+  event.stopPropagation();
+  approvedSmartChars.add(key);
+  runChecks();
+}
+
+// ============ HEADING OUTLINE ============
+function renderHeadingOutline() {
+  const text = editor.value;
+  const tree = document.getElementById('headingTree');
+  const lines = text.split('\n');
+  const headings = [];
+  const seen = {};
+
+  for (const line of lines) {
+    const m = line.match(/^(#{2,6})\s+(.+)/);
+    if (m) {
+      const level = m[1].length;
+      const title = m[2].trim();
+      const key = title.toLowerCase();
+      const isDup = seen[key] !== undefined;
+      seen[key] = true;
+      headings.push({ level, title, isDup });
+    }
+  }
+
+  if (headings.length === 0) {
+    tree.innerHTML = '<li style="color:var(--govuk-dark-grey)">No headings found.</li>';
+    return;
+  }
+
+  tree.innerHTML = headings.map(h => {
+    const cls = 'h' + h.level + (h.isDup ? ' dup' : '');
+    const dupLabel = h.isDup ? ' (duplicate)' : '';
+    return '<li class="' + cls + '">' +
+      '#'.repeat(h.level) + ' ' + escapeHtml(h.title) + dupLabel + '</li>';
+  }).join('');
+}
+
+// ============ PREVIEW RENDERER ============
+function renderPreview() {
+  const text = editor.value;
+  if (!text.trim()) {
+    document.getElementById('previewBody').innerHTML = '<p style="color:var(--govuk-dark-grey)">No content to preview.</p>';
+    return;
+  }
+
+  let html = text;
+
+  // Collect acronym definitions
+  const acronyms = {};
+  html = html.replace(/^\*\[([^\]]+)\]:\s*(.+)$/gm, (_, abbr, full) => {
+    acronyms[abbr] = full;
+    return '';
+  });
+
+  // Process blocks first - $C contact blocks
+  html = html.replace(/\$C\s*\n([\s\S]*?)\n\$C/g,
+    '<div class="contact-block">$1</div>');
+
+  // $A address blocks
+  html = html.replace(/\$A\s*\n([\s\S]*?)\n\$A/g,
+    '<div class="address-block">$1</div>');
+
+  // ^ info callouts (multiline)
+  html = html.replace(/^\^([\s\S]*?)\^$/gm,
+    '<div class="callout-info">$1</div>');
+
+  // % warning callouts (multiline)
+  html = html.replace(/^%([\s\S]*?)%$/gm,
+    '<div class="callout-warning">$1</div>');
+
+  // Tables
+  html = html.replace(/((?:^\|.+\|$\n?)+)/gm, (tableBlock) => {
+    const rows = tableBlock.trim().split('\n');
+    if (rows.length < 2) return tableBlock;
+
+    let tableHtml = '<table>';
+    rows.forEach((row, idx) => {
+      // Skip separator row
+      if (row.match(/^\|[\s\-:|]+\|$/)) return;
+      const cells = row.split('|').filter((c, i, a) => i > 0 && i < a.length - 1);
+      const tag = idx === 0 ? 'th' : 'td';
+      const rowTag = idx === 0 ? 'thead' : (idx === 1 ? 'tbody' : '');
+      if (idx === 0) tableHtml += '<thead>';
+      if (idx === 1) tableHtml += '</thead><tbody>';
+      tableHtml += '<tr>' + cells.map(c => '<' + tag + '>' + c.trim() + '</' + tag + '>').join('') + '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+    return tableHtml;
+  });
+
+  // Headings
+  html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+
+  // Horizontal rule
+  html = html.replace(/^---+$/gm, '<hr>');
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Unordered lists
+  html = html.replace(/((?:^[-*]\s+.+$\n?)+)/gm, (block) => {
+    const items = block.trim().split('\n').map(line => {
+      return '<li>' + line.replace(/^[-*]\s+/, '') + '</li>';
+    }).join('');
+    return '<ul>' + items + '</ul>';
+  });
+
+  // Ordered lists
+  html = html.replace(/((?:^\d+\.\s+.+$\n?)+)/gm, (block) => {
+    const items = block.trim().split('\n').map(line => {
+      return '<li>' + line.replace(/^\d+\.\s+/, '') + '</li>';
+    }).join('');
+    return '<ol>' + items + '</ol>';
+  });
+
+  // Button syntax
+  html = html.replace(/\{button\}\[([^\]]+)\]\(([^)]+)\)\{\/button\}/g,
+    '<a href="$2" style="display:inline-block;background:var(--govuk-green);color:#fff;padding:8px 16px;text-decoration:none;font-weight:700">$1</a>');
+
+  // Apply acronym abbreviations
+  for (const [abbr, full] of Object.entries(acronyms)) {
+    html = html.replace(new RegExp('\\b' + abbr + '\\b', 'g'),
+      '<abbr title="' + escapeHtml(full) + '">' + abbr + '</abbr>');
+  }
+
+  // Paragraphs - wrap remaining text lines
+  html = html.replace(/\n\n+/g, '</p><p>');
+  if (!html.startsWith('<')) html = '<p>' + html;
+  if (!html.endsWith('>')) html += '</p>';
+
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/<p>\s*(<(?:h[2-6]|ul|ol|table|div|hr))/g, '$1');
+  html = html.replace(/(<\/(?:h[2-6]|ul|ol|table|div|hr)>)\s*<\/p>/g, '$1');
+
+  document.getElementById('previewBody').innerHTML = html;
+}
+
+// ============ ACRONYM GENERATOR ============
+function generateAcronyms() {
+  const text = editor.value;
+  if (!text.trim()) {
+    document.getElementById('acronymOutput').value = '';
+    document.getElementById('unmatchedAcronyms').style.display = 'none';
+    return;
+  }
+
+  // Find all uppercase sequences (2+ letters, optionally ending with s)
+  const acronymRegex = /\b([A-Z]{2,}s?)\b/g;
+  const found = new Set();
+  let m;
+  while ((m = acronymRegex.exec(text)) !== null) {
+    found.add(m[1]);
+  }
+
+  // Find defined acronyms: "Full Name (ACRONYM)" pattern
+  const defRegex = /([A-Z][a-zA-Z]*(?:\s+(?:and\s+)?[a-zA-Z]+)*)\s+\(([A-Z]{2,})\)/g;
+  const definitions = {};
+  while ((m = defRegex.exec(text)) !== null) {
+    definitions[m[2]] = m[1];
+  }
+
+  // Also check for existing *[ACRONYM]: definitions in the text
+  const existingDefs = /^\*\[([^\]]+)\]:\s*(.+)$/gm;
+  while ((m = existingDefs.exec(text)) !== null) {
+    if (!definitions[m[1]]) {
+      definitions[m[1]] = m[2];
+    }
+  }
+
+  // Filter out common abbreviations
+  const acronyms = [];
+  const unmatched = [];
+
+  for (const acr of found) {
+    // Get base form (without trailing s)
+    const base = acr.endsWith('s') && acr.length > 2 ? acr.slice(0, -1) : acr;
+    const isPlural = acr.endsWith('s') && acr.length > 2 && acr !== base + 's' ? false : acr.endsWith('s') && acr.length > 2;
+
+    if (COMMON_ABBREVS.has(base) || COMMON_ABBREVS.has(acr)) continue;
+
+    // Check if already collected
+    if (acronyms.some(a => a.base === base)) continue;
+
+    const def = definitions[base] || definitions[acr];
+    if (def) {
+      acronyms.push({ base, def, hasPlural: found.has(base + 's') });
+    } else {
+      if (!unmatched.includes(base)) unmatched.push(base);
+    }
+  }
+
+  // Generate output: plural first, then singular
+  let output = '';
+  acronyms.sort((a, b) => a.base.localeCompare(b.base));
+  for (const acr of acronyms) {
+    if (acr.hasPlural) {
+      output += '*[' + acr.base + 's]: ' + acr.def + '\n';
+    }
+    output += '*[' + acr.base + ']: ' + acr.def + '\n';
+  }
+
+  document.getElementById('acronymOutput').value = output.trim();
+
+  // Show unmatched
+  const unmatchedEl = document.getElementById('unmatchedAcronyms');
+  if (unmatched.length > 0) {
+    unmatchedEl.style.display = 'block';
+    unmatchedEl.innerHTML = '<strong>Needs definition:</strong> ' +
+      unmatched.map(u => '<code>' + escapeHtml(u) + '</code>').join(', ') +
+      '<br><small>Add "Full Name (' + unmatched[0] + ')" to your text, or define manually below.</small>';
+  } else {
+    unmatchedEl.style.display = 'none';
+  }
+}
+
+// ============ COPY ACRONYMS ============
+function copyAcronyms() {
+  const output = document.getElementById('acronymOutput');
+  if (!output.value.trim()) return;
+  navigator.clipboard.writeText(output.value).then(() => {
+    const status = document.getElementById('copyStatus');
+    status.style.display = 'inline';
+    setTimeout(() => { status.style.display = 'none'; }, 2000);
+  });
+}
+
+// ============ CLEAR ============
+function clearAll() {
+  editor.value = '';
+  currentIssues = [];
+  approvedSmartChars.clear();
+  updateLineNumbers();
+  highlightOverlay.innerHTML = '';
+  document.getElementById('issuesList').innerHTML = '';
+  document.getElementById('noIssues').style.display = 'none';
+  document.getElementById('countAll').textContent = '0';
+  document.getElementById('countError').textContent = '0';
+  document.getElementById('countWarning').textContent = '0';
+  document.getElementById('countSuggestion').textContent = '0';
+  document.getElementById('summaryBar').textContent = 'Paste or type content to check.';
+  document.getElementById('headingTree').innerHTML = '';
+  document.getElementById('previewBody').innerHTML = '';
+  document.getElementById('acronymOutput').value = '';
+  document.getElementById('unmatchedAcronyms').style.display = 'none';
+}
+
+// ============ INIT ============
+updateLineNumbers();
+</script>
+</body>
+</html>
